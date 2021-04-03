@@ -1,151 +1,166 @@
 
-# Data element in vocabulary
-class Dat_voc_khru_bo:
+# Data associated with a primary thai word in khru Bo vocabulary files
+class DatVocKruBo:
     def __init__(self, lesson, indx, sub_indx,voc_th, voc_eng):
-        self.lesson = lesson        # Lesson counter
-        self.indx  = indx           # Word counter
-        self.sub_indx = sub_indx    # Word sub-counter
-        self.voc_th = voc_th        # Thai word @ counter @ sub-counter (list)
-        self.voc_eng = voc_eng      # Eng translations of word @ counter @ sub-counter (list of list)
+        self.lesson = lesson                        # Lesson counter
+        self.indx = indx                            # Word counter = vocabulary file index of primary word
+        self.sub_indx = sub_indx                    # Word sub-counter = counter of associated words
+        self.voc_th = voc_th                        # Thai words @ counter @ sub-counter [list]
+        self.voc_eng = voc_eng                      # Eng translations of words @ counter @ sub-counter [list of list]
 
     def flush(self):
         def __init__(self):
             members = [getattr(self, attr) for attr in dir(self) if not attr.startswith("__")]
             print (members)
 
-# Input/output data construct.
-# str_raw = input string, usually copy/paste from pdf. May be lesson vocab., lesson homework,
-# Patreaon, etc.
-class StrData:
-    def __init__(self, str_raw, line_list, line_list_len, block_list, data_list):
-        self.str_raw = str_raw
-        self.line_list = line_list
-        self.line_list_len = line_list_len
-        self.block_list = block_list
-        self.data_list = data_list
 
-    # Raw String split into lines + Number of lines
+# String data handling for Kru Bo vocabulary imports.
+class VocabularyKruBoLesson:
+    def __init__(self, str_raw):
+        self.str_raw = str_raw                      # Input raw string. Usually copy/past from pdf
+        self.line_list = []                         # List of lines in input strings
+        self.line_list_len = 0                      # Number of lines in line_List
+        self.block_list = []                        # List of word blocks
+        self.data_list = []
+
+    # Split input string into list of lines
     def str_lines(self):
         self.line_list=self.str_raw.splitlines()
         self.line_list_len=len(self.line_list)
 
-    # Replaces in input string in_str the substring consisting
-    # of repetitive string "search_substr" with
-    # string of equal length of repetitive rep_substr.
+    # Look in input string ("self.str_raw") for sequences of len>1 of the string
+    # search_substr, and replaces said sequences with sequence of the same length of the
+    # replacement string rep_substr.
     def replace_rep_str(self, search_substr, rep_substr):
         in_str_buff = []
-        # Transfer in string to list buffer
+        # Transfer input string to a list buffer. String thus transformed to list of characters
         for lett in self.str_raw:
             in_str_buff.append(lett)
+
+        # Initialize tracking variables
         i = 0
         seq_beg = 0
         seq_end = 0
         seq_on = False
+
+        # Start for loop over length of in_str_buff
         for j in range(len(in_str_buff)):
+
+            # search_substr detected at current position...
             if in_str_buff[j] == search_substr:
+
+                # First occurrence of search_substr
                 if not seq_on:
-                    seq_beg = j
-                    seq_end = j
-                    seq_on = True
+                    seq_beg = j                     # Store start pointer of sequence
+                    seq_end = j                     # Update end pointer of sequence
+                    seq_on = True                   # Switch flag seq_on, position is in sequence
                 else:
-                    seq_end = j
+                    seq_end = j                     # Update end pointer
+
+            # ...search_substr not detected at current position
             else:
+
+                # seq_on flag is ON, meaning a sequence of search_substr has just ended
                 if seq_on:
+
+                    # Sequence had length > 1, and thus must be replaced.
                     if seq_end - seq_beg > 0:
+                        # Replace sequence by sequence of character "rep_substr"
                         for k in range(seq_beg, seq_end + 1):
                             in_str_buff[k] = rep_substr
+                    # Update seq_beg, seq_end, flag according to situation
                     seq_beg = j
                     seq_end = j
                     seq_on = False
+
+        # Catch special case of input string ending with "search_substr"
         if seq_end - seq_beg > 0:
             for k in range(seq_beg, seq_end + 1):
                 in_str_buff[k] = rep_substr
+
+        # Map list buffer back onto a string
         out_str = ""
         for k in range(len(in_str_buff)):
             out_str = out_str + in_str_buff[k]
+
+        # Return output string
         return out_str
-
-
-# Code specific to vocabulary input, khru Bo.
-# Extract a list of "Dat_voc_khru_bo" objects, each of them belonging
-# to a vocabulary entry.
-class Voc_khru_bo(StrData):
-    def __init__(self, str_raw, line_list, line_list_len, block_list, data_list):
-        super().__init__(str_raw, line_list, line_list_len, block_list, data_list)
 
     # Find lesson number in vocabulary. Specific to khru Bo vocabulary.
     def lesson(self):
-        lesson = self.line_list[0].split(" ")[1]
+        lesson = self.line_list[0].split(" ")[1]    # Split lesson number from header line
         return lesson
 
-    # Extract the list "block_list", a collection of lists of lines
-    # which are referred to as "blocks". Each "block" corresponds in khru Bo's
-    # lesson vocabulary format to one thai key word.
-    def blocks(self):
-        # Code specific to vocabulary input, khru Bo.
-        # Each list of lines corresponds to one word
-        self.block_list=[]
-        block=[]
-        block_ctr=0
-        line_ctr=1
+    # Construct the list "block_list", a list of lists of lines
+    # which are referred to as "vocabulary blocks". Each "vocabulary block" corresponds to one
+    # primary Thai word.
+    def vocabulary_block_decompose(self):
+        self.block_list=[]                          # Initialize list of "blocks"
+        block=[]                                    # Initialize block buffer
+        block_ctr=0                                 # Initialize block counter
+        line_ctr=1                                  # Initialize line_ctr to first line after header
+
+        # Scan through lines until "…" is detected (khru Bo marker for EOI)
         while self.line_list[line_ctr][0] != "…":
-            # First character in line = Dec -> Block Increment
+
+            # If first character of line is decimal -> Increment block index
             if self.line_list[line_ctr][0].isdecimal():
-                # Block Buffer (block) nicht leer bedeutet block gehört nicht zu erstem Block
+
+                # Buffer not empty means it cannot be first block. Transfer buffer to block_list.
                 if len(block) != 0:
-                    # Block Buffer and block_list anhängen, block leeren, block_ctr inkrementieren
-                    self.block_list.append(block)
-                    block=[]
-                    block_ctr+=1
-                    block=[self.line_list[line_ctr]]
+                    self.block_list.append(block)   # Append block to block list
+                    block_ctr+=1                    # Increment block counter
+                    block = []                      # Empty block buffer
+                    block=[self.line_list[line_ctr]] # Initialize block with current line
+
+                # Block buffer empty. Thus very first block.
                 else:
-                    # Block buffer empty. This can only happen in very first block.
                     block.append(self.line_list[line_ctr])
+
+            # First character of line is NOT decimal. Current line NOT first line of block
             else:
-                # First charcter in line != Dec -> line is not first line of buffer
                 block.append(self.line_list[line_ctr])
             line_ctr+=1
+
         # Last block must be appended separately because loop terminates prior
         self.block_list.append(block)
 
-    # Decompose blocks into data clusters, each corresponding to one thai word
-    # Assumption data formatted according to lesson vocabulary khru Bo (template)
+    # Decompose block lists into data clusters, each corresponding to one thai word,
+    # and each such cluster organized according to data type VocKruBo.
     def block_data(self):
-        # buff is a container for vocabulary counter in vocabulary file, sub-counter,
-        # thai word, english translations.
-        buff = Dat_voc_khru_bo("", "", "", "", "")
-        s = []
-        # Run over collection (list) of blocks
+
+        buff = DatVocKruBo("", "", "", "", "")      # Define buffer of data type "VocKruBo"
+        s = []                                      # Collection of data type "VocKruBo"
+
+        # Run over collection of vocabulary blocks
         for blocks in self.block_list:
-            # Read lesson counter in header line of vocabulary file.
-            buff.lesson=self.lesson()
-            # .sub_index is a list of sub-indices. Each sub-index belongs to a sub-entry
-            # (lines in block) below the main vocabulary item (1st line in block).
-            buff.sub_indx = []
-            # Thai vocabulary belonging to main vocabulary are collected in list .voc_th.
-            # Each item in list corresponds to one sub-entry (lines in block) below the main vocabulary item
-            # (1st line in block).
-            buff.voc_th = []
-            # For each Thai vocabulary sub-entry there will be a list of translations.
-            buff.voc_eng = []
-            # Line counter of current block
-            i = 0
+
+            buff.lesson=self.lesson()               # Read lesson counter in header line of vocabulary file.
+            buff.sub_indx = []                      # Initialize collection of sub-entry indices
+            buff.voc_th = []                        # Initialize collection of thai words
+            buff.voc_eng = []                       # Initialize collection of english translation collections
+            i = 0                                   # Line counter of current block
+
+            # Run over lines in current block
             for block_lines in blocks:
+
                 # Line is first line in a block
                 if i==0:
                     # Read main vocabulary counter
                     buff.indx = block_lines.split(". ")[0]
                     # Read leading Thai vocabulary item
                     buff.voc_th.append(block_lines.split(". ")[1].split(" ")[0])
-                    # Append list of translation of leading Thai vocabulary item
+                    # Append list of translation of leading Thai vocabulary item (ignore phonetic string)
                     buff.voc_eng.append(block_lines.split(". ")[1].split(" ",2)[2].split(","))
-                    # Append sub_index value = 0 as i==0 corresponds to the first line in the block
+                    # Append to sub_index a value = 0, as i==0 corresponds to the first line in the block
                     buff.sub_indx.append(0)
+
                 # i != 0, i.e. the current line of the block corresponds to secondary vocabulary item.
                 else:
-                    # Catch case that less than 3 items result on split.
+                    # Regular situation : block line, split by " " contains 3 elements (Thai Wrd, phonetics,english)
                     if len(block_lines.split(" ",2)) == 3:
                             buff.voc_eng.append(block_lines.split(" ",2)[2].split(","))
+                    # Exception : No english translation given => apply translation of previous line
                     else:
                         buff.voc_eng.append(buff.voc_eng[i-1],)
                     # Add first substring to Thai items
@@ -153,13 +168,17 @@ class Voc_khru_bo(StrData):
                     buff.sub_indx.append(i)
                 #s.append(Dat_voc_khru_bo(buff.lesson, buff.indx, buff.sub_indx, buff.voc_th, buff.voc_eng))
                 i=i+1
-            s.append(Dat_voc_khru_bo(buff.lesson, buff.indx, buff.sub_indx, buff.voc_th, buff.voc_eng))
-        for v in s:
-            print(v.lesson, v.indx, v.sub_indx, v.voc_th, v.voc_eng)
+
+            # Append latest record DatVocKhruBo
+            s.append(DatVocKruBo(buff.lesson, buff.indx, buff.sub_indx, buff.voc_th, buff.voc_eng))
+
+        # for v in s:
+        #    print(v.lesson, v.indx, v.sub_indx, v.voc_th, v.voc_eng)
+        return s
 
 
 # Declare string as instance of data container
-string = Voc_khru_bo("""Vocabulary 15
+string = VocabularyKruBoLesson("""Vocabulary 15
 1. กำลังจะ gam-lang-jà to be going to,to be about to
 2. ...แรก …râek first
 ...ที่สอง …têe-sǒrng second
@@ -202,16 +221,14 @@ string = Voc_khru_bo("""Vocabulary 15
 นักศึกษำ nák-sèuk-sǎa university student
 ………………………………………………………………………………..
 ………………………………………………………………………………..
-………………………………………………………………………………..""", "", "", "", "")
+………………………………………………………………………………..""")
+
+# Replace sequences of >1 "." with sequence of "-" of equal length
 string.str_raw = string.replace_rep_str(".","-")
 # Split raw data input string str_raw into lines
 string.str_lines()
-# Decompose raw input string into vocabulary blocks
-string.blocks()
-# Dcompose vocabulary blocks into data clusters
-string.block_data()
-
-
-
-
-
+# Decompose raw input string into "vocabulary blocks"
+string.vocabulary_block_decompose()
+# Decompose vocabulary blocks into data clusters and print result
+for v in string.block_data():
+    print(v.lesson, v.indx, v.sub_indx, v.voc_th, v.voc_eng)
